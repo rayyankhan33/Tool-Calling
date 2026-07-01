@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bistro Prompt — order by chat (LangChain + Gemini)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1C1917;
+  --cream: #FAF6EF;
+  --card: #F1EBDD;
+  --paprika: #C9622A;
+  --paprika-dark: #A44B1C;
+  --herb: #4A7C59;
+  --line: #DCD3BE;
+  --muted: #8A8073;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--cream); color: var(--ink); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+h1, h2, .brand-mark { font-family: 'Fraunces', serif; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 32px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-mark { width: 44px; height: 44px; border-radius: 50%; background: var(--paprika); color: var(--cream); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; flex-shrink: 0; }
+.brand h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.tagline { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.topbar-note { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--muted); border: 1px solid var(--line); padding: 6px 12px; border-radius: 999px; }
+
+.layout { display: grid; grid-template-columns: 1.1fr 1fr; gap: 28px; padding: 28px 32px 60px; max-width: 1280px; margin: 0 auto; align-items: start; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+.panel-title { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; color: var(--muted); margin: 0 0 14px; }
+
+.menu-list { display: grid; gap: 10px; }
+.menu-item { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; transition: box-shadow .5s ease, border-color .5s ease; }
+.menu-item.highlight { border-color: var(--paprika); box-shadow: 0 0 0 2px rgba(201,98,42,0.15); }
+.menu-item-name { font-weight: 600; font-size: 15px; }
+.menu-item-desc { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.menu-item-cat { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--paprika-dark); margin-top: 4px; }
+.menu-item-price { font-family: 'Space Mono', monospace; font-weight: 700; white-space: nowrap; }
+
+.right-panel { display: grid; gap: 22px; }
+.chat-panel, .ticket-panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+
+.chat-log { height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; margin-bottom: 12px; }
+.msg { max-width: 88%; padding: 10px 13px; border-radius: 12px; font-size: 14px; line-height: 1.45; }
+.msg p { margin: 0; }
+.msg.user { align-self: flex-end; background: var(--paprika); color: var(--cream); border-bottom-right-radius: 3px; }
+.msg.assistant { align-self: flex-start; background: var(--cream); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+.msg.error { align-self: flex-start; background: #F6DEDA; border: 1px solid #E3A99B; color: #7A2E1E; }
+
+.chat-form { display: flex; gap: 8px; }
+.chat-form input { flex: 1; padding: 11px 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--cream); font-family: inherit; font-size: 14px; }
+.chat-form input:focus { outline: 2px solid var(--paprika); outline-offset: 1px; }
+.chat-form button { padding: 0 20px; border-radius: 8px; border: none; background: var(--ink); color: var(--cream); font-weight: 600; font-size: 14px; cursor: pointer; }
+.chat-form button:hover { background: var(--paprika-dark); }
+.chat-form button:disabled { opacity: .5; cursor: not-allowed; }
+
+.typing-indicator { display: flex; gap: 4px; padding: 8px 2px 0; }
+.typing-indicator.hidden { display: none; }
+.typing-indicator span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite ease-in-out; }
+.typing-indicator span:nth-child(2) { animation-delay: .15s; }
+.typing-indicator span:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-4px); opacity: 1; } }
+
+.ticket { background: var(--cream); border: 1px dashed var(--muted); border-radius: 4px; padding: 18px 18px 14px; font-family: 'Space Mono', monospace; }
+.ticket-header { text-align: center; margin-bottom: 12px; }
+.ticket-title { margin: 0; font-weight: 700; letter-spacing: .12em; font-size: 13px; }
+.ticket-sub { margin: 3px 0 0; font-size: 11px; color: var(--muted); }
+.ticket-items { min-height: 40px; }
+.ticket-empty { color: var(--muted); font-size: 12px; text-align: center; margin: 10px 0; }
+.ticket-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 4px 0; }
+.ticket-line .qty { color: var(--paprika-dark); font-weight: 700; }
+.ticket-line .name { flex: 1; margin: 0 8px; }
+.ticket-divider { border-top: 1px dashed var(--muted); margin: 10px 0; }
+.ticket-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+.ticket-confirmed { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--muted); font-size: 12px; color: var(--herb); text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">BP</span>
+    <div>
+      <h1>Bistro Prompt</h1>
+      <p class="tagline">a restaurant with no buttons — just say what you want</p>
+    </div>
+  </div>
+  <div class="topbar-note">LangChain + Gemini tool calling</div>
+</header>
+
+<main class="layout">
+
+  <section class="menu-panel" aria-label="Menu">
+    <h2 class="panel-title">Menu</h2>
+    <div id="menu-list" class="menu-list"></div>
+  </section>
+
+  <section class="right-panel">
+
+    <div class="chat-panel" aria-label="Order assistant chat">
+      <h2 class="panel-title">Tell us what you'd like</h2>
+      <div id="chat-log" class="chat-log">
+        <div class="msg assistant">
+          <p>Hey! I'm your ordering assistant. Try something like <em>"I'll have a margherita pizza and a coke"</em> or <em>"what desserts do you have?"</em></p>
+        </div>
+      </div>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-input" type="text" autocomplete="off" placeholder="Type your order…" required />
+        <button type="submit">Send</button>
+      </form>
+      <div id="typing-indicator" class="typing-indicator hidden">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+
+    <div class="ticket-panel" aria-label="Current order">
+      <div class="ticket">
+        <div class="ticket-header">
+          <p class="ticket-title">ORDER TICKET</p>
+          <p class="ticket-sub">Bistro Prompt · No. <span id="ticket-no">—</span></p>
+        </div>
+        <div id="ticket-items" class="ticket-items">
+          <p class="ticket-empty">Nothing ordered yet.</p>
+        </div>
+        <div class="ticket-divider"></div>
+        <div class="ticket-total">
+          <span>TOTAL</span>
+          <span id="ticket-total-amount">$0.00</span>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+const chatLog = document.getElementById("chat-log");
+const chatForm = document.getElementById("chat-form");
+const chatInput = document.getElementById("chat-input");
+const typingIndicator = document.getElementById("typing-indicator");
+const menuListEl = document.getElementById("menu-list");
+const ticketItemsEl = document.getElementById("ticket-items");
+const ticketTotalEl = document.getElementById("ticket-total-amount");
+const ticketNoEl = document.getElementById("ticket-no");
+
+let history = []; // [{role: "human"|"ai", content}] — kept so multi-turn context works
+let menu = [];
+
+async function loadMenu() {
+  const res = await fetch("/api/menu");
+  menu = await res.json();
+  renderMenu();
+}
+
+function renderMenu(highlightNames = []) {
+  menuListEl.innerHTML = "";
+  menu.forEach((item) => {
+    const el = document.createElement("div");
+    el.className = "menu-item" + (highlightNames.includes(item.name) ? " highlight" : "");
+    el.innerHTML = `
+      <div>
+        <div class="menu-item-name">${item.name}</div>
+        <div class="menu-item-desc">${item.description}</div>
+        <div class="menu-item-cat">${item.category}</div>
+      </div>
+      <div class="menu-item-price">$${item.price.toFixed(2)}</div>
+    `;
+    menuListEl.appendChild(el);
+  });
+}
+
+function renderCart(cart) {
+  if (!cart || cart.items.length === 0) {
+    ticketItemsEl.innerHTML = `<p class="ticket-empty">Nothing ordered yet.</p>`;
+    ticketTotalEl.textContent = "$0.00";
+    return;
+  }
+  let total = 0;
+  ticketItemsEl.innerHTML = cart.items
+    .map((i) => {
+      total += i.price * i.quantity;
+      const custom = i.customizations && i.customizations.length ? ` (${i.customizations.join(", ")})` : "";
+      return `
+        <div class="ticket-line">
+          <span class="qty">${i.quantity}×</span>
+          <span class="name">${i.name}${custom}</span>
+          <span>$${(i.price * i.quantity).toFixed(2)}</span>
+        </div>`;
+    })
+    .join("");
+  ticketTotalEl.textContent = `$${total.toFixed(2)}`;
+}
+
+function showLastOrderConfirmation(cart) {
+  if (!cart.lastOrder) return;
+  ticketNoEl.textContent = cart.lastOrder.orderId;
+  const confirmEl = document.createElement("div");
+  confirmEl.className = "ticket-confirmed";
+  confirmEl.textContent = `✓ Order placed — total $${cart.lastOrder.total}`;
+  document.querySelector(".ticket").appendChild(confirmEl);
+  setTimeout(() => confirmEl.remove(), 6000);
+}
+
+function addMessage(text, role) {
+  const el = document.createElement("div");
+  el.className = `msg ${role}`;
+  el.innerHTML = `<p>${text}</p>`;
+  chatLog.appendChild(el);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+async function sendMessage(message) {
+  addMessage(escapeHtml(message), "user");
+  chatInput.value = "";
+  chatInput.disabled = true;
+  typingIndicator.classList.remove("hidden");
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, history }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      addMessage(escapeHtml(data.error || "Something went wrong."), "error");
+      return;
+    }
+
+    history = data.history || history;
+    addMessage(escapeHtml(data.reply || "Done."), "assistant");
+    renderCart(data.cart);
+
+    const touchedNames = (data.toolLog || [])
+      .filter((t) => ["add_to_cart", "remove_from_cart", "update_quantity"].includes(t.tool))
+      .map((t) => t.input?.item_name)
+      .filter(Boolean);
+    renderMenu(touchedNames);
+    setTimeout(() => renderMenu(), 2500);
+
+    if ((data.toolLog || []).some((t) => t.tool === "place_order" && t.result?.success)) {
+      showLastOrderConfirmation(data.cart);
+    }
+  } catch (err) {
+    addMessage("Couldn't reach the server. Is it running?", "error");
+  } finally {
+    chatInput.disabled = false;
+    typingIndicator.classList.add("hidden");
+    chatInput.focus();
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+chatForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const message = chatInput.value.trim();
+  if (message) sendMessage(message);
+});
+
+loadMenu();
+</script>
+</body>
+</html>
